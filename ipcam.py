@@ -8,26 +8,21 @@ import time
 
 # --- Konfigurasi ---
 SOURCE = "WEBCAM" # "WEBCAM" atau "RTSP"
-RTSP_URL = 'rtsp://user:password@ip_address:port/stream_path' # Ganti dengan URL Anda
+RTSP_URL = 'rtsp://user:password@ip_address:port/stream_path'
 WEBCAM_INDEX = 0
 
 LANGUAGES = ['en'] 
 ALLOW_LIST = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
-PROCESS_INTERVAL_MS = 1000 # Proses OCR setiap 2 detik
+PROCESS_INTERVAL_MS = 1000
 
-# --- Shared Data and Queues ---
-# Queue untuk menampung frame terbaru yang siap diproses oleh worker thread
 frame_queue = Queue(maxsize=1) 
 
-# Container thread-safe untuk menyimpan hasil OCR terbaru DAN bounding box-nya
-# Sekarang menyimpan list tuple: (plat_string, bbox)
 plate_result = {
-    'plates': [],  # List of (plate_string, bbox)
+    'plates': [],
     'last_update': 0.0
 } 
 result_lock = threading.Lock()
 
-# --- Inisialisasi EasyOCR (Global, Hanya Sekali) ---
 try:
     reader = easyocr.Reader(LANGUAGES, gpu=False) 
     print("[✅ INFO] EasyOCR Reader siap digunakan (CPU Mode).")
@@ -35,13 +30,8 @@ except Exception as e:
     print(f"[❌ ERROR] Gagal inisialisasi EasyOCR: {e}")
     exit()
 
-# --- Fungsi Validasi dan Pembersihan ---
-
 def clean_license_plate(text: str) -> str:
-    """Membersihkan dan memvalidasi teks gabungan agar sesuai format plat nomor Indonesia."""
-    # Hilangkan spasi ganda
     text = re.sub(r'\s+', ' ', text).strip()
-    # Hapus semua karakter non-plat dan jadikan huruf besar
     text = re.sub(r'[^A-Z0-9 ]', '', text.upper()) 
     
     # Mencocokkan pola plat Indonesia dengan fleksibilitas spasi:
@@ -52,10 +42,8 @@ def clean_license_plate(text: str) -> str:
     
     if match:
         area_code, numbers, suffix = match.groups()
-        
-        # Perbaikan umum (ini bisa diperluas lagi)
         area_code = area_code.replace('8', 'B').replace('0', 'O')
-        numbers = numbers.replace('O', '0').replace('I', '1') # Angka lebih sensitif
+        numbers = numbers.replace('O', '0').replace('I', '1')
         suffix = suffix.replace('0', 'O')
         
         parts = [area_code, numbers]
@@ -115,13 +103,12 @@ def scan_plate_simple(frame: np.ndarray) -> list[tuple[str, list]] :
     except Exception as e:
         print(f"[⚠️ ERROR] Error saat memproses frame: {e}")
         return []
-
-# --- Worker Thread (Proses Berat) ---
-
+    
 def ocr_worker():
     """Thread yang bertanggung jawab menjalankan OCR secara periodik."""
     global plate_result
-    
+    plate_results = []
+
     while True:
         try:
             frame = frame_queue.get_nowait() 
@@ -144,7 +131,7 @@ def ocr_worker():
                 # Jika tidak ada plat yang ditemukan, plate_result['plates'] akan tetap kosong
                 # agar display tidak menampilkan plat yang salah
                 else:
-                    plate_result['plates'] = [] 
+                    plate_result['plates'] = []
                 
             print(f"[WORKER] OCR selesai dalam {int((end_time - start_time) * 1000)}ms. Ditemukan {len(plates_with_boxes)} plat.")
             time.sleep(PROCESS_INTERVAL_MS / 1000.0)
@@ -156,6 +143,13 @@ def ocr_worker():
             time.sleep(1)
         finally:
             if 'frame' in locals() and frame is not None:
+                plate_results.append(plate_result)
+                if len(plate_results) > 3:
+                    plate_results = [result for result in plate_results if result['plates']]
+                    if plate_results:
+                        final_plate_result = max(plate_results, key=lambda x: x['last_update'])
+                        print(f"[WORKER] Hasil OCR final (dari {len(plate_results)} hasil): {final_plate_result}")
+                    plate_results = []
                 frame_queue.task_done()
 
 # --- Main Thread (I/O dan Display) ---
