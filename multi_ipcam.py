@@ -8,13 +8,14 @@ import time
 import json
 import logging
 from typing import Dict, Any, List, Tuple
-from validate import validate_booking_plate
+from validate import validate_booking_plate, play_valid_sound, play_invalid_sound
+
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(threadName)s - %(levelname)s - %(message)s')
 logger = logging.getLogger('MultiCamLPR')
 
 LANGUAGES = ['en'] 
 ALLOW_LIST = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
-PROCESS_INTERVAL_SEC = 0.5
+PROCESS_INTERVAL_SEC = 1
 
 global_camera_states: Dict[str, Dict[str, Any]] = {}
 global_state_lock = threading.Lock()
@@ -214,7 +215,9 @@ if __name__ == '__main__':
             'last_update': 0.0,
             'current_frame': None, # Frame terbaru untuk display
             'active': True,
-            'config': config
+            'config': config,
+            'last_sound_time': 0.0,
+            'sound_cooldown': 10.0
         }
 
         # 2. Buat Worker Thread (OCR)
@@ -244,6 +247,7 @@ if __name__ == '__main__':
             for state in active_cameras:
                 slot_id = state['config']['parking_slot_id']
                 frame = state['current_frame']
+                sound_thread = None
 
                 if frame is not None:
                     display_frame = frame.copy()
@@ -252,12 +256,33 @@ if __name__ == '__main__':
                     
                     # --- Drawing Logic (Hanya di Main Thread) ---
                     display_text_main = f"Slot: {slot_id} | Mencari..."
-                    main_color = (0, 255, 255) 
+                    main_color = (0, 255, 255)
                     
                     if current_plates_info:
                         first_plate_string = current_plates_info[0][0]
                         is_valid = current_plates_info[0][1]
                         similarity = current_plates_info[0][2]
+
+                        current_time = time.time()
+                        last_sound_time = state.get('last_sound_time', 0.0)
+                        cooldown = state.get('sound_cooldown', 3.0) 
+
+                        if current_time - last_sound_time >= cooldown:
+                            
+                            if is_valid == True:
+                                sound_func = play_valid_sound
+                            elif is_valid == False:
+                                sound_func = play_invalid_sound
+                            else:
+                                sound_func = None
+
+                            if sound_func:
+                                sound_thread = threading.Thread(target=sound_func, daemon=True)
+                                sound_thread.start()
+                                
+                                state['last_sound_time'] = current_time
+                                logger.info(f"Suara diputar untuk {slot_id} ({'Valid' if is_valid else 'Invalid'}). Cooldown diaktifkan.")
+
                         time_diff = time.time() - last_update
                         display_text_main = f"Slot: {slot_id} | {first_plate_string} ({'Valid' if is_valid else 'Invalid'} {similarity:.2f}) ({time_diff:.1f}s)"
                         main_color = (0, 255, 0) if is_valid else (0, 0, 255)
@@ -266,6 +291,7 @@ if __name__ == '__main__':
                             x, y, w, h = bbox
                             cv2.rectangle(display_frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
                             cv2.putText(display_frame, plate_string, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+
 
                     cv2.putText(display_frame, display_text_main, (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, main_color, 2)
                     cv2.imshow(f'LPR: {slot_id}', display_frame)
