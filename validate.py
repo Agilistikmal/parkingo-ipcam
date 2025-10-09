@@ -2,6 +2,7 @@ import requests
 import json
 from gtts import gTTS
 from playsound3 import playsound
+import os
 
 def validate_booking_plate(parking_slot_id: str, plate: str):
     with open('settings.json', 'r') as f:
@@ -31,11 +32,17 @@ def validate_booking_plate(parking_slot_id: str, plate: str):
     return data
 
 def play_valid_sound():
-    tts = gTTS(text='Parkir anda sudah di validasi', lang='id')
-    tts.save('valid.mp3')
-    playsound('valid.mp3')
+    if os.path.exists('valid.mp3'):
+        playsound('valid.mp3')
+    else:
+        tts = gTTS(text='Parkir anda sudah di validasi', lang='id')
+        tts.save('valid.mp3')
+        playsound('valid.mp3')
 
 def play_invalid_sound():
-    tts = gTTS(text=f'Slot ini telah di booking orang lain, bukan untuk kendaraan anda. Pindahkan sekarang', lang='id')
-    tts.save('invalid.mp3')
-    playsound('invalid.mp3')
+    if os.path.exists('invalid.mp3'):
+        playsound('invalid.mp3')
+    else:
+        tts = gTTS(text=f'Slot ini telah di booking orang lain, bukan untuk kendaraan anda. Pindahkan sekarang', lang='id')
+        tts.save('invalid.mp3')
+        playsound('invalid.mp3')
