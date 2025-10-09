@@ -104,13 +104,22 @@ def ocr_worker(slot_id: str):
             
             with global_state_lock:
                 if plates_with_boxes:
-                    new_plate = plates_with_boxes[0][0]
+                    new_plate, bbox_coords = plates_with_boxes[0]
                     if new_plate != last_validated_plate:
-                        if validate_booking_plate(settings['parking_id'], slot_id, new_plate):
+                        validated_data = validate_booking_plate(slot_id, new_plate)
+                        if validated_data:
+                            is_valid = validated_data['is_valid']
+                            similarity = validated_data['similarity']
+                            
                             global_camera_states[slot_id]['last_validated_plate'] = new_plate
-                            logger.info(f"Plat {new_plate} di slot {slot_id} valid.")
+                            updated_plate_info = (new_plate, is_valid, similarity, bbox_coords)
+                            plates_with_boxes[0] = updated_plate_info 
                         else:
                             logger.info(f"Plat {new_plate} di slot {slot_id} tidak valid.")
+                            is_valid = False
+                            similarity = 0.0 # Nilai default
+                            updated_plate_info = (new_plate, is_valid, similarity, bbox_coords)
+                            plates_with_boxes[0] = updated_plate_info 
 
                     global_camera_states[slot_id]['plates'] = plates_with_boxes
                     global_camera_states[slot_id]['last_update'] = end_time
@@ -247,11 +256,13 @@ if __name__ == '__main__':
                     
                     if current_plates_info:
                         first_plate_string = current_plates_info[0][0]
+                        is_valid = current_plates_info[0][1]
+                        similarity = current_plates_info[0][2]
                         time_diff = time.time() - last_update
-                        display_text_main = f"Slot: {slot_id} | PLAT: {first_plate_string} ({time_diff:.1f}s)"
-                        main_color = (0, 255, 0)
+                        display_text_main = f"Slot: {slot_id} | {first_plate_string} ({'Valid' if is_valid else 'Invalid'} {similarity:.2f}) ({time_diff:.1f}s)"
+                        main_color = (0, 255, 0) if is_valid else (0, 0, 255)
                         
-                        for plate_string, bbox in current_plates_info:
+                        for plate_string, _, _, bbox in current_plates_info:
                             x, y, w, h = bbox
                             cv2.rectangle(display_frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
                             cv2.putText(display_frame, plate_string, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
