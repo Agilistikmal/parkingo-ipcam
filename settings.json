@@ -4,14 +4,9 @@
   "parking_id": "mall-abc-yogyakarta",
   "cameras": [
     {
-      "parking_slot_id": "P11",
-      "source_type": "WEBCAM",
-      "source": "0"
-    },
-    {
-      "parking_slot_id": "P13",
+      "parking_slot_id": "P12",
       "source_type": "RTSP",
-      "source": "rtsp://user:password@ip_address:port/stream_path"
+      "source": "rtsp://81185121:1234567890@192.168.1.100:554/stream0"
     }
   ]
 }

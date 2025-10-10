@@ -160,6 +160,8 @@ def stream_reader_worker(config: Dict[str, Any]):
     try:
         while True:
             ret, frame = cap.read()
+
+            resized_frame = cv2.resize(frame, (640, 480))
             
             if not ret or frame is None:
                 logger.warning(f"Stream {slot_id} hilang. Mencoba koneksi ulang...")
@@ -172,13 +174,13 @@ def stream_reader_worker(config: Dict[str, Any]):
 
             # 1. Simpan frame terbaru untuk display oleh Main Thread
             with global_state_lock:
-                global_camera_states[slot_id]['current_frame'] = frame
+                global_camera_states[slot_id]['current_frame'] = resized_frame
                 
             # 2. Kirim frame terbaru untuk di-OCR (Worker Thread)
             if frame_queue.full():
                 try: frame_queue.get_nowait()
                 except Empty: pass
-            frame_queue.put_nowait(frame.copy()) 
+            frame_queue.put_nowait(resized_frame.copy()) 
             
             # Kecilkan delay di sini agar I/O cepat
             time.sleep(0.001)
