@@ -121,6 +121,19 @@ def ocr_worker(slot_id: str):
                             similarity = 0.0 # Nilai default
                             updated_plate_info = (new_plate, is_valid, similarity, bbox_coords)
                             plates_with_boxes[0] = updated_plate_info 
+                    else:
+                        # Jika plat sama dengan yang terakhir divalidasi, pastikan struktur tuple konsisten
+                        # Ambil data validasi dari state sebelumnya jika ada
+                        existing_plates = global_camera_states[slot_id].get('plates', [])
+                        if existing_plates and len(existing_plates) > 0 and len(existing_plates[0]) >= 4:
+                            # Gunakan data validasi yang sudah ada
+                            _, is_valid, similarity, _ = existing_plates[0]
+                            updated_plate_info = (new_plate, is_valid, similarity, bbox_coords)
+                            plates_with_boxes[0] = updated_plate_info
+                        else:
+                            # Jika tidak ada data validasi sebelumnya, set default
+                            updated_plate_info = (new_plate, False, 0.0, bbox_coords)
+                            plates_with_boxes[0] = updated_plate_info
 
                     global_camera_states[slot_id]['plates'] = plates_with_boxes
                     global_camera_states[slot_id]['last_update'] = end_time
@@ -260,10 +273,17 @@ if __name__ == '__main__':
                     display_text_main = f"Slot: {slot_id} | Mencari..."
                     main_color = (0, 255, 255)
                     
-                    if current_plates_info:
-                        first_plate_string = current_plates_info[0][0]
-                        is_valid = current_plates_info[0][1]
-                        similarity = current_plates_info[0][2]
+                    if current_plates_info and len(current_plates_info) > 0:
+                        plate_data = current_plates_info[0]
+                        if len(plate_data) >= 4:
+                            first_plate_string = plate_data[0]
+                            is_valid = plate_data[1]
+                            similarity = plate_data[2]
+                        else:
+                            # Fallback untuk struktur data lama
+                            first_plate_string = plate_data[0]
+                            is_valid = False
+                            similarity = 0.0
 
                         current_time = time.time()
                         last_sound_time = state.get('last_sound_time', 0.0)
@@ -289,10 +309,12 @@ if __name__ == '__main__':
                         display_text_main = f"Slot: {slot_id} | {first_plate_string} ({'Valid' if is_valid else 'Invalid'} {similarity:.2f}) ({time_diff:.1f}s)"
                         main_color = (0, 255, 0) if is_valid else (0, 0, 255)
                         
-                        for plate_string, _, _, bbox in current_plates_info:
-                            x, y, w, h = bbox
-                            cv2.rectangle(display_frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
-                            cv2.putText(display_frame, plate_string, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+                        for plate_data in current_plates_info:
+                            if len(plate_data) >= 4:
+                                plate_string, _, _, bbox = plate_data
+                                x, y, w, h = bbox
+                                cv2.rectangle(display_frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+                                cv2.putText(display_frame, plate_string, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
 
 
                     cv2.putText(display_frame, display_text_main, (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, main_color, 2)

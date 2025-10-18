@@ -1,12 +1,12 @@
 {
   "api_key": "cGFya2luZ28tbW9kdWxl",
   "api_url": "https://parkingo-core.agil.zip",
-  "parking_id": "mall-abc-yogyakarta",
+  "parking_id": "krusty-krab-uty",
   "cameras": [
     {
-      "parking_slot_id": "P12",
+      "parking_slot_id": "P24",
       "source_type": "RTSP",
-      "source": "rtsp://81185121:1234567890@192.168.1.100:554/stream0"
+      "source": "rtsp://81185121:Parkingo2110@192.168.18.75:554/stream0"
     }
   ]
 }
